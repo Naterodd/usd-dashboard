@@ -112,35 +112,7 @@ try:
 except Exception as e:
     st.error(f"Error loading Trade Weighted USD data: {e}")
 
-# -------------------- 7. US GDP Growth vs World GDP Growth --------------------
-st.subheader("GDP Growth: U.S. vs World")
-try:
-    from pandas_datareader import wb  # keep wb import only for World Bank data
-    
-    us_gdp = wb.download(indicator='NY.GDP.MKTP.KD.ZG', country='US', start=start_date.year, end=end_date.year)
-    world_gdp = wb.download(indicator='NY.GDP.MKTP.KD.ZG', country='WLD', start=start_date.year, end=end_date.year)
-
-    us_gdp = us_gdp.reset_index()
-    world_gdp = world_gdp.reset_index()
-
-    us_gdp = us_gdp.rename(columns={'NY.GDP.MKTP.KD.ZG': 'US GDP Growth'})
-    world_gdp = world_gdp.rename(columns={'NY.GDP.MKTP.KD.ZG': 'World GDP Growth'})
-
-    merged_gdp = pd.merge(
-        us_gdp[['year', 'US GDP Growth']],
-        world_gdp[['year', 'World GDP Growth']],
-        on='year'
-    )
-
-    merged_gdp['date'] = pd.to_datetime(merged_gdp['year'], format='%Y')
-    merged_gdp.set_index('date', inplace=True)
-    merged_gdp.drop(columns=['year'], inplace=True)
-
-    st.line_chart(merged_gdp)
-except Exception as e:
-    st.error(f"Error loading GDP growth data: {e}")
-
-# -------------------- 8. Google Trends --------------------
+# -------------------- 7. Google Trends --------------------
 st.subheader("Google Search Trends: 'US Dollar'")
 try:
     pytrends = TrendReq()
