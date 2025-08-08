@@ -3,9 +3,8 @@ import pandas as pd
 import yfinance as yf
 from pytrends.request import TrendReq
 from datetime import datetime
-from pandas_datareader import data as pdr
-from pandas_datareader import wb
 import numpy as np
+from fredapi import Fred
 
 # -------------------- Page Config --------------------
 st.set_page_config(page_title="USD Dashboard", layout="wide")
@@ -26,10 +25,15 @@ def compute_rsi(series, window=14):
     rs = gain / loss
     return 100 - (100 / (1 + rs))
 
+# -------------------- FRED API Setup --------------------
+FRED_API_KEY = "07b2c0e6debee8197995cddb614ff624"  # <-- Replace this with your FRED API key
+fred = Fred(api_key=FRED_API_KEY)
+
 # -------------------- 1. Inflation: CPI --------------------
 st.subheader("Inflation: CPI (Monthly Change in Basis Points)")
 try:
-    cpi = pdr.DataReader('CPIAUCSL', 'fred', start_date, end_date)
+    cpi = fred.get_series('CPIAUCSL', observation_start=start_date, observation_end=end_date)
+    cpi = cpi.to_frame(name='CPIAUCSL')
     cpi['MoM Change (bps)'] = cpi['CPIAUCSL'].pct_change() * 10_000
     st.line_chart(cpi['MoM Change (bps)'].dropna())
 except Exception as e:
@@ -38,8 +42,8 @@ except Exception as e:
 # -------------------- 2. Debt as % of GDP --------------------
 st.subheader("U.S. Federal Debt as % of GDP")
 try:
-    debt_gdp = pdr.DataReader('GFDEGDQ188S', 'fred', start_date, end_date)
-    debt_gdp = debt_gdp.rename(columns={'GFDEGDQ188S': 'Debt/GDP (%)'})
+    debt_gdp = fred.get_series('GFDEGDQ188S', observation_start=start_date, observation_end=end_date)
+    debt_gdp = debt_gdp.to_frame(name='Debt/GDP (%)')
     st.line_chart(debt_gdp)
 except Exception as e:
     st.error(f"Error loading Debt/GDP data: {e}")
@@ -92,7 +96,8 @@ except Exception as e:
 # -------------------- 5. 2-Year Treasury Yield --------------------
 st.subheader("2-Year U.S. Treasury Yield (%)")
 try:
-    twoy = pdr.DataReader('DGS2', 'fred', start_date, end_date)
+    twoy = fred.get_series('DGS2', observation_start=start_date, observation_end=end_date)
+    twoy = twoy.to_frame(name='2-Year Treasury Yield (%)')
     st.line_chart(twoy)
 except Exception as e:
     st.error(f"Error loading 2-Year Treasury Yield: {e}")
@@ -100,7 +105,8 @@ except Exception as e:
 # -------------------- 6. Trade Weighted USD + RSI --------------------
 st.subheader("Trade Weighted U.S. Dollar Index (Broad) + RSI")
 try:
-    trade_weighted = pdr.DataReader('DTWEXBGS', 'fred', start_date, end_date)
+    trade_weighted = fred.get_series('DTWEXBGS', observation_start=start_date, observation_end=end_date)
+    trade_weighted = trade_weighted.to_frame(name='DTWEXBGS')
     trade_weighted['RSI'] = compute_rsi(trade_weighted['DTWEXBGS'])
     st.line_chart(trade_weighted)
 except Exception as e:
@@ -109,6 +115,8 @@ except Exception as e:
 # -------------------- 7. US GDP Growth vs World GDP Growth --------------------
 st.subheader("GDP Growth: U.S. vs World")
 try:
+    from pandas_datareader import wb  # keep wb import only for World Bank data
+    
     us_gdp = wb.download(indicator='NY.GDP.MKTP.KD.ZG', country='US', start=start_date.year, end=end_date.year)
     world_gdp = wb.download(indicator='NY.GDP.MKTP.KD.ZG', country='WLD', start=start_date.year, end=end_date.year)
 
@@ -118,26 +126,19 @@ try:
     us_gdp = us_gdp.rename(columns={'NY.GDP.MKTP.KD.ZG': 'US GDP Growth'})
     world_gdp = world_gdp.rename(columns={'NY.GDP.MKTP.KD.ZG': 'World GDP Growth'})
 
-    # Merge on 'year' instead of 'date'
     merged_gdp = pd.merge(
         us_gdp[['year', 'US GDP Growth']],
         world_gdp[['year', 'World GDP Growth']],
         on='year'
     )
 
-    # Convert 'year' to datetime by making it Jan 1 of the year
     merged_gdp['date'] = pd.to_datetime(merged_gdp['year'], format='%Y')
-
     merged_gdp.set_index('date', inplace=True)
-
-    # Drop 'year' column as index is now date
     merged_gdp.drop(columns=['year'], inplace=True)
 
     st.line_chart(merged_gdp)
-
 except Exception as e:
     st.error(f"Error loading GDP growth data: {e}")
-
 
 # -------------------- 8. Google Trends --------------------
 st.subheader("Google Search Trends: 'US Dollar'")
@@ -151,4 +152,4 @@ except Exception as e:
     st.error(f"Error loading Google Trends: {e}")
 
 # -------------------- Footer --------------------
-st.caption("📊 Data Sources: FRED (via pandas_datareader), Yahoo Finance, Google Trends, World Bank")
+st.caption("📊 Data Sources: FRED (via fredapi), Yahoo Finance, Google Trends, World Bank")
